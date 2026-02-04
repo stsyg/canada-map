@@ -910,12 +910,12 @@ MAP_TEMPLATE = """
             category: ['army', 'navy', 'air', 'special']
         };
         
-        // Initialize map with wider bounds to show UK and Europe
+        // Initialize map centered on Canada with good detail level
         const map = new maplibregl.Map({
             container: 'map',
             style: TILESERVER_URL + '/styles/osm-bright/style.json',
-            center: [-50.0, 55.0],
-            zoom: 2.5
+            center: [-96.0, 56.0],
+            zoom: 3.5
         });
 
         map.addControl(new maplibregl.NavigationControl());
