@@ -1,0 +1,29 @@
+﻿{
+    "$schema": "./azure-params.schema.json",
+    "_instructions": "Copy this file to azure-params.json (gitignored) and fill in real values. For CI/CD, use GitHub Secrets instead.",
+    "subscription_id": "<your-subscription-id>",
+    "resource_group": "rg-canada-map-<env>",
+    "location": "canadacentral",
+    "container_registry": {
+        "name": "acr<unique-suffix>",
+        "login_server": "acr<unique-suffix>.azurecr.io"
+    },
+    "storage_account": {
+        "name": "st<unique-suffix>",
+        "container_name": "maptiles"
+    },
+    "key_vault": {
+        "name": "kv-canada-map-<env>"
+    },
+    "container_apps": {
+        "environment_name": "cae-canada-map-<env>",
+        "api_app_name": "ca-poi-api",
+        "tileserver_app_name": "ca-tileserver"
+    },
+    "_comment": "Front Door is optional for PoC - Container Apps provide built-in HTTPS URLs",
+    "front_door": {
+        "enabled": false,
+        "name": "fd-canada-map-<env>",
+        "endpoint_name": "canada-map"
+    }
+}

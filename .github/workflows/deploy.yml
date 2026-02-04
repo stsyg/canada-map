@@ -1,0 +1,94 @@
+﻿name: Deploy to Azure Container Apps
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'services/**'
+      - '.github/workflows/deploy.yml'
+  workflow_dispatch:
+
+env:
+  AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  AZURE_RG: ${{ vars.AZURE_RESOURCE_GROUP }}
+  ACR_NAME: ${{ vars.ACR_NAME }}
+  ACR_LOGIN_SERVER: ${{ vars.ACR_LOGIN_SERVER }}
+  CONTAINER_APP_ENV: ${{ vars.CONTAINER_APP_ENV }}
+  API_APP_NAME: ${{ vars.API_APP_NAME }}
+  TILESERVER_APP_NAME: ${{ vars.TILESERVER_APP_NAME }}
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Login to ACR
+        run: az acr login --name ${{ env.ACR_NAME }}
+
+      - name: Build and push POI API image
+        run: |
+          docker build -t ${{ env.ACR_LOGIN_SERVER }}/poi-api:${{ github.sha }} \
+                       -t ${{ env.ACR_LOGIN_SERVER }}/poi-api:latest \
+                       ./services/api
+          docker push ${{ env.ACR_LOGIN_SERVER }}/poi-api:${{ github.sha }}
+          docker push ${{ env.ACR_LOGIN_SERVER }}/poi-api:latest
+
+      - name: Build and push TileServer image
+        run: |
+          docker build -t ${{ env.ACR_LOGIN_SERVER }}/tileserver:${{ github.sha }} \
+                       -t ${{ env.ACR_LOGIN_SERVER }}/tileserver:latest \
+                       ./services/tileserver
+          docker push ${{ env.ACR_LOGIN_SERVER }}/tileserver:${{ github.sha }}
+          docker push ${{ env.ACR_LOGIN_SERVER }}/tileserver:latest
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy POI API Container App
+        run: |
+          az containerapp update \
+            --name ${{ env.API_APP_NAME }} \
+            --resource-group ${{ env.AZURE_RG }} \
+            --image ${{ env.ACR_LOGIN_SERVER }}/poi-api:${{ github.sha }}
+
+      - name: Deploy TileServer Container App
+        run: |
+          az containerapp update \
+            --name ${{ env.TILESERVER_APP_NAME }} \
+            --resource-group ${{ env.AZURE_RG }} \
+            --image ${{ env.ACR_LOGIN_SERVER }}/tileserver:${{ github.sha }}
+
+      - name: Verify deployments
+        run: |
+          echo "POI API:"
+          az containerapp show --name ${{ env.API_APP_NAME }} --resource-group ${{ env.AZURE_RG }} \
+            --query "{name:name, status:properties.runningStatus, fqdn:properties.configuration.ingress.fqdn}" -o table
+          
+          echo "TileServer:"
+          az containerapp show --name ${{ env.TILESERVER_APP_NAME }} --resource-group ${{ env.AZURE_RG }} \
+            --query "{name:name, status:properties.runningStatus, fqdn:properties.configuration.ingress.fqdn}" -o table

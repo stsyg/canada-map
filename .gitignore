@@ -1,0 +1,66 @@
+﻿# =========================
+# Azure & Secrets
+# =========================
+# Real params file (copy from azure-params.example.json)
+azure-params.json
+azure-params.*.json
+!azure-params.example.json
+
+# Environment files
+.env
+.env.local
+.env.*.local
+*.local.json
+
+# Azure CLI
+.azure/
+
+# =========================
+# Map Data (too large for git)
+# =========================
+data/*.mbtiles
+data/*.osm.pbf
+data/*.tsv.gz
+data/sources/
+data/tmp/
+data/styles/
+data/config.json
+*.mbtiles
+*.osm.pbf
+
+# =========================
+# Python
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+ENV/
+.eggs/
+*.egg-info/
+dist/
+build/
+
+# =========================
+# Docker
+# =========================
+.docker/
+
+# =========================
+# IDE & OS
+# =========================
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# =========================
+# Logs
+# =========================
+*.log
+logs/

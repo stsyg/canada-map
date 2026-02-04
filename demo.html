@@ -1,0 +1,107 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Canada Map - TileServer GL Demo</title>
+    <script src="https://unpkg.com/maplibre-gl@4.0.0/dist/maplibre-gl.js"></script>
+    <link href="https://unpkg.com/maplibre-gl@4.0.0/dist/maplibre-gl.css" rel="stylesheet" />
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+
+        #map {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 100%;
+        }
+
+        .info-box {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+            font-family: sans-serif;
+            font-size: 14px;
+            max-width: 300px;
+            z-index: 1000;
+        }
+
+        .info-box h3 {
+            margin-top: 0;
+        }
+
+        .info-box code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 12px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="map"></div>
+    <div class="info-box">
+        <h3>🗺️ Canada Map Demo</h3>
+        <p>Self-hosted OpenMapTiles via TileServer GL</p>
+        <p><strong>API Endpoints:</strong></p>
+        <ul>
+            <li>Vector: <code>/data/v3/{z}/{x}/{y}.pbf</code></li>
+            <li>Raster: <code>/styles/basic-preview/{z}/{x}/{y}.png</code></li>
+            <li>Style: <code>/styles/basic-preview/style.json</code></li>
+        </ul>
+        <p><small>Zoom: <span id="zoom">-</span> | Center: <span id="center">-</span></small></p>
+    </div>
+
+    <script>
+        const map = new maplibregl.Map({
+            container: 'map',
+            style: 'http://localhost:8080/styles/basic-preview/style.json',
+            center: [-96.0, 56.0], // Central Canada
+            zoom: 4,
+            maxBounds: [[-141.0, 41.0], [-52.0, 84.0]] // Canada bounds
+        });
+
+        map.addControl(new maplibregl.NavigationControl());
+        map.addControl(new maplibregl.ScaleControl());
+
+        // Update info box with current position
+        map.on('moveend', () => {
+            const center = map.getCenter();
+            document.getElementById('zoom').textContent = map.getZoom().toFixed(1);
+            document.getElementById('center').textContent =
+                `${center.lat.toFixed(4)}, ${center.lng.toFixed(4)}`;
+        });
+
+        // Add markers for major Canadian cities
+        const cities = [
+            { name: 'Toronto', coords: [-79.3832, 43.6532] },
+            { name: 'Montreal', coords: [-73.5674, 45.5019] },
+            { name: 'Vancouver', coords: [-123.1216, 49.2827] },
+            { name: 'Calgary', coords: [-114.0719, 51.0447] },
+            { name: 'Edmonton', coords: [-113.4909, 53.5461] },
+            { name: 'Ottawa', coords: [-75.6972, 45.4215] },
+            { name: 'Winnipeg', coords: [-97.1384, 49.8951] },
+            { name: 'Halifax', coords: [-63.5752, 44.6488] },
+            { name: 'Quebec City', coords: [-71.2080, 46.8139] },
+            { name: 'Victoria', coords: [-123.3656, 48.4284] }
+        ];
+
+        cities.forEach(city => {
+            new maplibregl.Marker()
+                .setLngLat(city.coords)
+                .setPopup(new maplibregl.Popup().setHTML(`<h4>${city.name}</h4>`))
+                .addTo(map);
+        });
+    </script>
+</body>
+
+</html>

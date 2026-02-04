@@ -1,0 +1,27 @@
+﻿{
+    "options": {
+        "paths": {
+            "root": "/data",
+            "fonts": "fonts",
+            "sprites": "sprites",
+            "styles": "styles",
+            "mbtiles": ""
+        },
+        "serveAllFonts": true,
+        "serveAllStyles": true,
+        "serveStaticMaps": true
+    },
+    "styles": {
+        "basic": {
+            "style": "styles/basic/style.json"
+        },
+        "osm-bright": {
+            "style": "styles/osm-bright/style.json"
+        }
+    },
+    "data": {
+        "canada": {
+            "mbtiles": "canada.mbtiles"
+        }
+    }
+}

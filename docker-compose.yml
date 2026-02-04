@@ -1,0 +1,37 @@
+﻿services:
+  tileserver:
+    build: ./services/tileserver
+    container_name: canada-tileserver
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/data
+    working_dir: /data
+    networks:
+      - canada-map-network
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:8080/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))\""]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  poi-api:
+    build: ./services/api
+    container_name: canada-poi-api
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - TILESERVER_URL=http://tileserver:8080
+      - TILESERVER_PUBLIC_URL=http://localhost:8080
+    depends_on:
+      tileserver:
+        condition: service_healthy
+    networks:
+      - canada-map-network
+
+networks:
+  canada-map-network:
+    driver: bridge
