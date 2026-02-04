@@ -1,12 +1,23 @@
 ﻿name: Deploy to Azure Container Apps
 
+# Manual trigger only - automatic deployment on push is not configured
+# To enable automatic deployment, uncomment the push trigger below
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'services/**'
-      - '.github/workflows/deploy.yml'
+  # push:
+  #   branches: [main]
+  #   paths:
+  #     - 'services/**'
+  #     - '.github/workflows/deploy.yml'
   workflow_dispatch:
+    inputs:
+      deploy_poi_api:
+        description: 'Deploy POI API'
+        type: boolean
+        default: true
+      deploy_tileserver:
+        description: 'Deploy TileServer'
+        type: boolean
+        default: true
 
 env:
   AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}

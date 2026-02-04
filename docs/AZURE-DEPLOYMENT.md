@@ -1,220 +1,174 @@
 ﻿# Azure Deployment Guide
 
-This document explains how to deploy the Canada Map PoC to Azure using GitHub Actions.
+This document explains the Azure deployment architecture for the Canada Map PoC.
+
+> **Infrastructure Setup**: For step-by-step infrastructure provisioning, see [AZURE-INFRASTRUCTURE.md](AZURE-INFRASTRUCTURE.md).
 
 ## Architecture Overview
 
-### Minimal PoC (Recommended)
-
 ```
-    ┌───────────────────────────┐       ┌───────────────────────────┐
-    │   POI API Container App   │       │  TileServer Container App │
-    │       (ca-poi-api)        │       │     (ca-tileserver)       │
-    │   *.azurecontainerapps.io │       │   *.azurecontainerapps.io │
-    │         Port 5000         │       │        Port 8080          │
-    └───────────────────────────┘       └───────────────────────────┘
-                                                   │
-                                                   │ Mounted Volume
-                                                   ▼
-                                    ┌───────────────────────────────┐
-                                    │    Azure Blob Storage         │
-                                    │   (maptiles container)        │
-                                    │   - canada.mbtiles (2.6GB)    │
-                                    └───────────────────────────────┘
-```
-
-Container Apps provide auto-generated HTTPS URLs (e.g., `ca-poi-api.kindgrass-abc123.canadacentral.azurecontainerapps.io`).
-
-### With Front Door (Optional - Production)
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                        Azure Front Door (Optional)                          │
-│                     Custom domain + CDN + WAF                               │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                      │
-                    ┌─────────────────┴─────────────────┐
-                    ▼                                   ▼
-              Container Apps                      Container Apps
+┌────────────────────────────────────────────────────────────────────────────┐
+│                    Azure Container Apps Environment                         │
+│                        (cae-canada-map-lab)                                 │
+│                                                                             │
+│   ┌─────────────────────────┐       ┌─────────────────────────────────┐    │
+│   │     ca-poi-api          │       │       ca-tileserver             │    │
+│   │   *.azurecontainerapps  │──────▶│     *.azurecontainerapps        │    │
+│   │     Port 5000           │       │       Port 8080                 │    │
+│   │   0.5 CPU / 1Gi         │       │     2 CPU / 4Gi                 │    │
+│   │                         │       │   (2.7GB image with mbtiles)    │    │
+│   └─────────────────────────┘       └─────────────────────────────────┘    │
+│                                                                             │
+└────────────────────────────────────────────────────────────────────────────┘
+                    │
+                    │ Pull images (Managed Identity - passwordless)
+                    ▼
+        ┌─────────────────────┐
+        │   Azure Container   │
+        │   Registry (Basic)  │
+        │   acr<random>       │
+        └─────────────────────┘
 ```
 
-Add Front Door later if you need: custom domain, CDN caching, WAF, or global load balancing.
+### Services
 
-## Prerequisites
+| Service | Purpose | Resources | Image Size |
+|---------|---------|-----------|------------|
+| **ca-poi-api** | Flask app with Map UI and REST API | 0.5 CPU / 1Gi | ~150MB |
+| **ca-tileserver** | TileServer GL with baked-in mbtiles | 2 CPU / 4Gi | ~2.7GB |
 
-Infrastructure is provisioned via Terraform in a separate repository. The following resources must exist:
+### Key URLs
 
-| Resource | Example Name | Purpose |
-|----------|--------------|---------|
-| Resource Group | `rg-canada-map-poc` | Container for all resources |
-| Container Registry | `acrcanadamappoc` | Docker image storage |
-| Storage Account | `stcanadamappoc` | Map tiles blob storage |
-| Key Vault | `kv-canada-map-poc` | Secrets management |
-| Container Apps Environment | `cae-canada-map-poc` | Container runtime |
-| Container App (API) | `ca-poi-api` | POI API service |
-| Container App (TileServer) | `ca-tileserver` | TileServer GL service |
-| Front Door *(optional)* | `fd-canada-map-poc` | CDN and global routing (not needed for PoC) |
+After deployment, your services will be available at:
 
-## One-Time Setup
+- **POI API**: `https://ca-poi-api.<random>.<region>.azurecontainerapps.io`
+- **TileServer**: `https://ca-tileserver.<random>.<region>.azurecontainerapps.io`
 
-### 1. Configure Azure Parameters (Local Development Only)
+## Design Decisions
 
-```bash
-# Copy the example file (azure-params.json is gitignored)
-cp azure-params.example.json azure-params.json
+### Why Bake mbtiles into Docker Image?
 
-# Edit with your real values
-code azure-params.json
-```
+We bake the 2.6GB `canada.mbtiles` file directly into the TileServer Docker image instead of using Azure Files mount because:
 
-> ⚠️ **Security**: Never commit `azure-params.json` - it's gitignored. For CI/CD, use GitHub Secrets and Variables instead (see step 3).
+1. **Azure Policy Constraints**: Many enterprise Azure subscriptions have policies that disable storage key-based authentication. Azure Files mount for Container Apps requires storage keys.
+2. **Simplicity**: No additional storage configuration needed
+3. **Portability**: Image is self-contained and can run anywhere
 
-### 2. Upload Map Tiles to Blob Storage
+Trade-off: Image is 2.7GB and takes ~5 minutes to push to ACR.
 
-The `canada.mbtiles` file is ~2.6GB and should be uploaded manually (not via CI/CD):
+### Why Managed Identity?
 
-```bash
-# Login to Azure
-az login --use-device-code
+Container Apps use Managed Identity to pull images from ACR:
+- No passwords or secrets to manage
+- Automatic credential rotation
+- No Key Vault needed for this use case
 
-# Set subscription
-az account set --subscription "<subscription-id>"
+### Why Consumption Tier?
 
-# Upload mbtiles file
-az storage blob upload \
-  --account-name stcanadamappoc \
-  --container-name maptiles \
-  --file ./data/canada.mbtiles \
-  --name canada.mbtiles \
-  --auth-mode login
-```
+- **Scales to zero** when idle (cost: $0)
+- Perfect for PoC/demo workloads
+- Automatically scales up when requests come in
 
-Alternatively, use Azure Storage Explorer for a GUI upload.
+## GitHub Actions CI/CD
 
-### 3. Configure GitHub Repository Secrets
+The workflow file at `.github/workflows/deploy.yml` supports **manual deployment only**.
 
-Navigate to **Settings > Secrets and variables > Actions** in your GitHub repository.
-
-> 🔒 **Security**: All sensitive configuration lives in GitHub Secrets/Variables, NOT in code. The `azure-params.example.json` is just a template for local reference.
-
-#### Secrets (sensitive values - never in code)
-
-| Secret Name | Description |
-|-------------|-------------|
-| `AZURE_CLIENT_ID` | Service Principal or Managed Identity client ID |
-| `AZURE_TENANT_ID` | Azure AD tenant ID |
-| `AZURE_SUBSCRIPTION_ID` | Azure subscription ID |
-
-#### Variables (non-sensitive configuration)
-
-| Variable Name | Example Value |
-|---------------|---------------|
-| `AZURE_RESOURCE_GROUP` | `rg-canada-map-poc` |
-| `ACR_NAME` | `acrcanadamappoc` |
-| `ACR_LOGIN_SERVER` | `acrcanadamappoc.azurecr.io` |
-| `CONTAINER_APP_ENV` | `cae-canada-map-poc` |
-| `API_APP_NAME` | `ca-poi-api` |
-| `TILESERVER_APP_NAME` | `ca-tileserver` |
-
-### 4. Configure OIDC Authentication
-
-For secure, secretless authentication, configure Workload Identity Federation:
-
-```bash
-# Create federated credential for GitHub Actions
-az ad app federated-credential create \
-  --id <app-object-id> \
-  --parameters '{
-    "name": "github-actions-main",
-    "issuer": "https://token.actions.githubusercontent.com",
-    "subject": "repo:<org>/<repo>:ref:refs/heads/main",
-    "audiences": ["api://AzureADTokenExchange"]
-  }'
-```
-
-## Deployment Process
-
-### Automatic Deployment
-
-Push to `main` branch triggers the GitHub Actions workflow:
-
-1. **Build** - Docker images built for both services
-2. **Push** - Images pushed to Azure Container Registry
-3. **Deploy** - Container Apps updated with new images
+> **Note**: Automatic deployment on push to `main` is disabled. The workflow is configured for manual trigger via `workflow_dispatch`. To enable automatic deployment, uncomment the `push` trigger in the workflow file.
 
 ### Manual Deployment
 
-Trigger deployment manually via GitHub Actions UI:
-1. Go to **Actions** tab
+1. Go to **Actions** tab in GitHub
 2. Select **Deploy to Azure Container Apps**
 3. Click **Run workflow**
+4. Choose which services to deploy
 
-### Local Testing Before Deploy
+### Required GitHub Secrets
+
+Configure these in **Settings > Secrets and variables > Actions**:
+
+| Secret | Description |
+|--------|-------------|
+| `AZURE_CLIENT_ID` | Service Principal client ID |
+| `AZURE_TENANT_ID` | Azure AD tenant ID |
+| `AZURE_SUBSCRIPTION_ID` | Azure subscription ID |
+
+### Required GitHub Variables
+
+| Variable | Example Value |
+|----------|---------------|
+| `AZURE_RESOURCE_GROUP` | `rg-canada-map-lab` |
+| `ACR_NAME` | `acrf85f730f` |
+| `ACR_LOGIN_SERVER` | `acrf85f730f.azurecr.io` |
+| `CONTAINER_APP_ENV` | `cae-canada-map-lab` |
+| `API_APP_NAME` | `ca-poi-api` |
+| `TILESERVER_APP_NAME` | `ca-tileserver` |
+
+## Environment Variables
+
+### POI API Container
+
+| Variable | Value | Purpose |
+|----------|-------|---------|
+| `TILESERVER_URL` | `https://ca-tileserver.<domain>` | Internal tile requests |
+| `TILESERVER_PUBLIC_URL` | `https://ca-tileserver.<domain>` | Browser tile requests |
+
+### TileServer Container
+
+| Variable | Value | Purpose |
+|----------|-------|---------|
+| `PUBLIC_URL` | `https://ca-tileserver.<domain>` | Correct URL generation for tiles/fonts |
+
+## TileServer Configuration
+
+The TileServer requires specific configuration to work behind a reverse proxy:
+
+### config.json
+
+```json
+{
+    "options": {
+        "paths": {
+            "root": "/data",
+            "styles": "styles",
+            "fonts": "/usr/src/app/node_modules/tileserver-gl-styles/fonts",
+            "mbtiles": ""
+        },
+        "serveAllStyles": true,
+        "serveStaticMaps": false
+    },
+    "styles": {
+        "basic": { "style": "basic/style.json" },
+        "osm-bright": { "style": "osm-bright/style.json" }
+    },
+    "data": {
+        "canada": { "mbtiles": "canada.mbtiles" }
+    }
+}
+```
+
+**Important**: The `fonts` path must point to the built-in TileServer fonts location, not `/data/fonts`.
+
+### PUBLIC_URL Environment Variable
+
+TileServer must know its public URL to generate correct tile/font URLs. This is passed via `PUBLIC_URL` environment variable and handled in `Dockerfile.azure`:
+
+```dockerfile
+ENV PUBLIC_URL=""
+CMD ["sh", "-c", "if [ -n \"$PUBLIC_URL\" ]; then exec node /usr/src/app/ --public_url \"$PUBLIC_URL\"; else exec node /usr/src/app/; fi"]
+```
+
+## Local Development
 
 ```bash
-# Build and test locally
-docker compose up --build
+# Start services locally
+docker compose up -d --build
 
-# Access services
+# Access points
 # - Map UI: http://localhost:5000
 # - TileServer: http://localhost:8080
 ```
 
-## File Structure
-
-```
-canada-map/
-├── .github/
-│   └── workflows/
-│       └── deploy.yml          # GitHub Actions workflow
-├── services/
-│   ├── api/
-│   │   ├── app.py              # Flask API + UI
-│   │   ├── Dockerfile
-│   │   └── requirements.txt
-│   └── tileserver/
-│       ├── Dockerfile          # TileServer container
-│       ├── config.json         # TileServer configuration
-│       └── styles/             # Map styles
-├── data/
-│   └── canada.mbtiles          # Map tiles (not in git)
-├── docs/
-│   └── AZURE-DEPLOYMENT.md     # This file
-├── azure-params.example.json   # Example parameters
-├── docker-compose.yml          # Local development
-└── README.md
-```
-
-## Environment Configuration
-
-### Container App Environment Variables
-
-**POI API (`ca-poi-api`):**
-| Variable | Value |
-|----------|-------|
-| `TILESERVER_URL` | `https://ca-tileserver.<region>.azurecontainerapps.io` |
-| `PORT` | `5000` |
-
-**TileServer (`ca-tileserver`):**
-| Variable | Value |
-|----------|-------|
-| `MBTILES_PATH` | `/data/canada.mbtiles` |
-
-### Storage Mount Configuration
-
-The TileServer Container App requires a storage mount to access the mbtiles file:
-
-```bash
-# Create storage mount
-az containerapp update \
-  --name ca-tileserver \
-  --resource-group rg-canada-map-poc \
-  --set-env-vars MBTILES_PATH=/data/canada.mbtiles
-
-# Configure volume (done in Terraform)
-```
-
-## Monitoring & Troubleshooting
+## Monitoring
 
 ### View Logs
 
@@ -222,64 +176,56 @@ az containerapp update \
 # POI API logs
 az containerapp logs show \
   --name ca-poi-api \
-  --resource-group rg-canada-map-poc \
-  --follow
+  --resource-group rg-canada-map-lab \
+  --tail 50
 
 # TileServer logs
 az containerapp logs show \
   --name ca-tileserver \
-  --resource-group rg-canada-map-poc \
-  --follow
+  --resource-group rg-canada-map-lab \
+  --tail 50
 ```
 
-### Check Container Status
+### Health Checks
 
 ```bash
-az containerapp show \
-  --name ca-poi-api \
-  --resource-group rg-canada-map-poc \
-  --query "properties.runningStatus"
+# TileServer health
+curl https://ca-tileserver.<domain>/health
+
+# POI API health
+curl https://ca-poi-api.<domain>/api/health
 ```
 
-### Common Issues
+## Common Issues
 
-| Issue | Solution |
-|-------|----------|
-| Image pull failed | Check ACR credentials and Container App identity |
-| Storage mount not working | Verify blob container permissions |
-| Health check failing | Check container port and startup time |
-| Slow tile loading | Consider adding Front Door for CDN caching |
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| **Map loads but no labels** | Fonts not accessible | Check `fonts` path in config.json points to `/usr/src/app/node_modules/tileserver-gl-styles/fonts` |
+| **Malformed tile URLs** | Missing PUBLIC_URL | Set `PUBLIC_URL` env var on TileServer Container App |
+| **Blank map on POI API** | Wrong style path | Use `osm-bright` style, not `basic-preview` |
+| **Container won't start** | Not enough resources | TileServer needs 2 CPU / 4Gi for 2.6GB mbtiles |
+| **Image pull failed** | ACR auth | Ensure `--registry-identity system` is set |
 
-## Cost Comparison
+## Cost Estimate
 
-### Container Apps vs App Service
+| Resource | SKU | Monthly Cost |
+|----------|-----|--------------|
+| Container Registry | Basic | ~$5 |
+| Container Apps (idle) | Consumption | $0 |
+| Container Apps (active) | Consumption | ~$20 |
+| **Total (idle)** | | **~$5** |
+| **Total (active)** | | **~$25** |
 
-| Service | Pricing | Scale to Zero | PoC Monthly Cost |
-|---------|---------|---------------|------------------|
-| **Container Apps (Consumption)** | Pay per vCPU-second | ✅ Yes | ~$0-5 (low traffic) |
-| **App Service (Basic B1)** | ~$13/month per app | ❌ No | ~$26 (2 apps) |
+## Security Notes
 
-**Recommendation**: Use Container Apps Consumption tier for PoC - it's essentially free when idle.
-
-### Cost Optimization Tips
-
-- Use **Consumption** tier for Container Apps (scales to zero)
-- Enable **Cool** tier for blob storage (infrequent access)
-- Set minimum replicas to 0 for auto-scale down
-- **Skip Front Door** for PoC (use Container Apps built-in HTTPS URLs)
-- Add Front Door later only if you need custom domain or CDN caching
-
-## Security Considerations
-
-- ✅ OIDC authentication (no stored secrets)
-- ✅ Managed Identity for Container Apps
-- ✅ Key Vault for sensitive configuration
-- ✅ Private networking optional (add via Terraform)
 - ✅ HTTPS enforced (Container Apps provides built-in TLS)
+- ✅ Managed Identity for ACR (no secrets)
+- ✅ No storage keys or connection strings
+- ✅ Scales to zero when idle
 
-## Next Steps (Production)
+## Future Improvements
 
-1. Add Front Door for custom domain and CDN
-2. Set up Application Insights for monitoring
-3. Configure alerts for container health
-4. Add staging environment slot
+- Add Azure Front Door for custom domain and CDN caching
+- Enable Application Insights for monitoring
+- Configure auto-scaling rules based on CPU/memory
+- Add staging environment for testing
