@@ -12,7 +12,9 @@
         "name": "st<unique-suffix>",
         "container_name": "maptiles"
     },
+    "_comment_kv": "Key Vault is optional for PoC - only needed if storing secrets",
     "key_vault": {
+        "enabled": false,
         "name": "kv-canada-map-<env>"
     },
     "container_apps": {

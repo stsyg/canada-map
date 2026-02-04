@@ -12,5 +12,8 @@ COPY --from=mbtiles /canada.mbtiles /data/canada.mbtiles
 
 EXPOSE 8080
 
-# Use default entrypoint from base image (docker-entrypoint.sh)
-# It will automatically find config.json in /data
+# Public URL for Azure deployment (can be overridden via env var)
+ENV PUBLIC_URL=""
+
+# Use default entrypoint from base image but allow passing public_url
+CMD ["sh", "-c", "if [ -n \"$PUBLIC_URL\" ]; then exec node /usr/src/app/ --public_url \"$PUBLIC_URL\"; else exec node /usr/src/app/; fi"]

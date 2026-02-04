@@ -75,7 +75,7 @@ The `canada.mbtiles` file is ~2.6GB and should be uploaded manually (not via CI/
 
 ```bash
 # Login to Azure
-az login
+az login --use-device-code
 
 # Set subscription
 az account set --subscription "<subscription-id>"
