@@ -1,22 +1,19 @@
-﻿{
+{
     "options": {
         "paths": {
             "root": "/data",
-            "fonts": "fonts",
-            "sprites": "sprites",
             "styles": "styles",
             "mbtiles": ""
         },
-        "serveAllFonts": true,
         "serveAllStyles": true,
-        "serveStaticMaps": true
+        "serveStaticMaps": false
     },
     "styles": {
         "basic": {
-            "style": "styles/basic/style.json"
+            "style": "basic/style.json"
         },
         "osm-bright": {
-            "style": "styles/osm-bright/style.json"
+            "style": "osm-bright/style.json"
         }
     },
     "data": {

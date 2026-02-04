@@ -1,4 +1,4 @@
-﻿{
+{
     "version": 8,
     "name": "OSM Bright",
     "metadata": {
@@ -8,7 +8,7 @@
     "sources": {
         "openmaptiles": {
             "type": "vector",
-            "url": "mbtiles://{ontario}"
+            "url": "mbtiles://{canada}"
         }
     },
     "sprite": "",

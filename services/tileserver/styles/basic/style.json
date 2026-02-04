@@ -1,11 +1,11 @@
-﻿{
+{
     "version": 8,
     "name": "Basic",
     "metadata": {},
     "sources": {
         "openmaptiles": {
             "type": "vector",
-            "url": "mbtiles://{ontario}"
+            "url": "mbtiles://{canada}"
         }
     },
     "sprite": "",

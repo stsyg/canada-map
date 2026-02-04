@@ -1,0 +1,16 @@
+FROM maptiler/tileserver-gl:latest
+
+# Working directory is /data (set by base image)
+WORKDIR /data
+
+# Copy configuration and styles to /data
+COPY config.json /data/config.json
+COPY styles /data/styles
+
+# Copy the mbtiles file directly into the image
+COPY --from=mbtiles /canada.mbtiles /data/canada.mbtiles
+
+EXPOSE 8080
+
+# Use default entrypoint from base image (docker-entrypoint.sh)
+# It will automatically find config.json in /data
