@@ -3,11 +3,6 @@
 A self-hosted map tile server using TileServer GL with OpenMapTiles data for Canada.
 Provides a cost-effective alternative to Azure Maps for internal/PoC use cases.
 
-## Live Demo (Azure)
-
-- **Map with POIs**: https://ca-poi-api.whitedune-f8591151.canadacentral.azurecontainerapps.io
-- **TileServer**: https://ca-tileserver.whitedune-f8591151.canadacentral.azurecontainerapps.io
-
 ## Features
 
 - 🗺️ **Full Canada map** with provinces, cities, roads, water features
