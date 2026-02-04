@@ -913,7 +913,7 @@ MAP_TEMPLATE = """
         // Initialize map with wider bounds to show UK and Europe
         const map = new maplibregl.Map({
             container: 'map',
-            style: TILESERVER_URL + '/styles/basic-preview/style.json',
+            style: TILESERVER_URL + '/styles/osm-bright/style.json',
             center: [-50.0, 55.0],
             zoom: 2.5
         });
