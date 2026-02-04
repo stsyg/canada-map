@@ -8,7 +8,9 @@
         "name": "acr<unique-suffix>",
         "login_server": "acr<unique-suffix>.azurecr.io"
     },
+    "_comment_sa": "Storage Account is optional for PoC - only needed if storing maps",
     "storage_account": {
+        "enabled": false,
         "name": "st<unique-suffix>",
         "container_name": "maptiles"
     },
